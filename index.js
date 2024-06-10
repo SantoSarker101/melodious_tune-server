@@ -53,6 +53,9 @@ async function run() {
     await client.connect();
 
 
+    const usersCollection = client.db('melodiousTuneDb').collection('users')
+
+
 
 	 // Generate jwt token
    app.post('/jwt', (req, res) => {
@@ -61,6 +64,23 @@ async function run() {
     const token = jwt.sign(email, process.env.ACCESS_SECRET_TOKEN, {expiresIn: '9999999999999d'})
     console.log(token);
     res.send({token})
+  })
+
+
+
+
+  // Users related apis
+  app.put('/users/:email', async(req, res) => {
+    const email = req.params.email
+    const user = req.body
+    const query = { email: email }
+    const option = { upsert: true }
+    const updateDoc = {
+      $set: user,
+    }
+    const result = await usersCollection.updateOne(query, updateDoc, option)
+    console.log(result);
+    res.send(result)
   })
 
 
