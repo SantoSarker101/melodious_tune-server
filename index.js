@@ -54,6 +54,7 @@ async function run() {
 
 
     const usersCollection = client.db('melodiousTuneDb').collection('users')
+    const classesCollection = client.db('melodiousTuneDb').collection('classes')
 
 
 
@@ -68,27 +69,27 @@ async function run() {
 
 
 // verify Admin
-  const verifyAdmin = async(req, res, next) => {
-    const email = req.decoded.email;
-    const query = { email: email }
-    const user = await usersCollection.findOne(query)
-    if(user?.role !== 'admin'){
-      return res.status(403).send({error: true, message: 'Forbidden Access'});
-    }
-    next()
-  }
+  // const verifyAdmin = async(req, res, next) => {
+  //   const email = req.decoded.email;
+  //   const query = { email: email }
+  //   const user = await usersCollection.findOne(query)
+  //   if(user?.role !== 'admin'){
+  //     return res.status(403).send({error: true, message: 'Forbidden Access'});
+  //   }
+  //   next()
+  // }
 
 
   // Verify Instructor
-  const verifyInstructor = async(req, res, next) => {
-    const email = req.decoded.email;
-    const query = { email: email }
-    const user = await usersCollection.findOne(query)
-    if(user?.role !== 'Instructor'){
-      return res.status(403).send({error: true, message: 'Forbidden Access'});
-    }
-    next()
-  }
+  // const verifyInstructor = async(req, res, next) => {
+  //   const email = req.decoded.email;
+  //   const query = { email: email }
+  //   const user = await usersCollection.findOne(query)
+  //   if(user?.role !== 'Instructor'){
+  //     return res.status(403).send({error: true, message: 'Forbidden Access'});
+  //   }
+  //   next()
+  // }
 
 
 
@@ -201,6 +202,32 @@ async function run() {
 
 
 
+
+
+  // --- Classes Related API
+
+      // send Classes to Database
+    app.post('/menu', verifyJWT, async(req, res) => {
+      const newClass = req.body;
+      const result = await classesCollection.insertOne(newClass)
+      res.send(result)
+    })
+
+
+    // Send Classes to instructor
+    app.get('/classes', async (req, res) => {
+      const result = await classesCollection.find().toArray();
+      res.send(result)
+    })
+
+
+    // Delete Classes to
+    app.delete('/classes/:id', verifyJWT, async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await classesCollection.deleteOne(query)
+      res.send(result)
+    })
 
 
 
