@@ -207,7 +207,7 @@ async function run() {
   // --- Classes Related API
 
       // send Classes to Database
-    app.post('/menu', verifyJWT, async(req, res) => {
+    app.post('/classes', verifyJWT, async(req, res) => {
       const newClass = req.body;
       const result = await classesCollection.insertOne(newClass)
       res.send(result)
@@ -221,7 +221,7 @@ async function run() {
     })
 
 
-    // Delete Classes to
+    // Delete Classes by instructor
     app.delete('/classes/:id', verifyJWT, async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
@@ -232,7 +232,38 @@ async function run() {
 
 
 
-    // Created Class status Approved
+    // Created Class status Approved API
+    app.patch('/classes/approve/:id', verifyJWT, async (req, res) => {
+      const id = req.params.id
+      const filter = { _id: new ObjectId(id) }
+      const updatedDoc = {
+        $set: {
+          status: 'Approved'
+        }
+      }
+      const result = await classesCollection.updateOne(filter, updatedDoc);
+      res.send(result)
+    })
+
+
+
+    // Created Class status Denied API
+    app.patch('/classes/deny/:id', verifyJWT, async (req, res) => {
+      const id = req.params.id
+      const filter = { _id: new ObjectId(id) }
+      const updatedDoc = {
+        $set: {
+          status: 'Denied'
+        }
+      }
+      const result = await classesCollection.updateOne(filter, updatedDoc);
+      res.send(result)
+    })
+
+
+
+
+    
 
 
 
