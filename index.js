@@ -55,6 +55,7 @@ async function run() {
 
     const usersCollection = client.db('melodiousTuneDb').collection('users')
     const classesCollection = client.db('melodiousTuneDb').collection('classes')
+    const selectedClassesCollection = client.db('melodiousTuneDb').collection('selectedClasses')
 
 
 
@@ -263,7 +264,31 @@ async function run() {
 
 
 
-    
+
+  // --- selectedClasses Related API
+
+      // POST selectedClasses to database
+      app.post('/selectedClasses', verifyJWT, async (req, res) => {
+        const selectedClass = req.body;
+        console.log(selectedClass);
+        const result = await selectedClassesCollection.insertOne(selectedClass);
+        res.send(result);
+      })
+
+
+      // GET selectedClasses From database to Client
+      app.get('/selectedClasses', async (req, res) => {
+        studentEmail = req.query.studentEmail
+        console.log(studentEmail);
+        filter = { 'studentInfo.studentEmail': studentEmail }
+        console.log(filter);
+        const result = await selectedClassesCollection.find(filter).toArray()
+        res.send(result)
+      })
+
+
+
+
 
 
 
