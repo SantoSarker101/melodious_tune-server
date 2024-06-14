@@ -288,7 +288,7 @@ async function run() {
 
 
       // GET selectedClasses From database to Client
-      app.get('/selectedClasses', async (req, res) => {
+      app.get('/selectedClasses', verifyJWT, async (req, res) => {
         studentEmail = req.query.studentEmail
         console.log(studentEmail);
         filter = { 'studentInfo.studentEmail': studentEmail }
@@ -297,6 +297,15 @@ async function run() {
         res.send(result)
       })
 
+
+
+    // DELETE selectedClass From Selected Class Page
+    app.delete('/selectedClasses/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await selectedClassesCollection.deleteOne(query)
+      res.send(result);
+    })
 
 
 
