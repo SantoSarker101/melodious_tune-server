@@ -215,6 +215,17 @@ async function run() {
     })
 
 
+     // GET specific instructor only classes From database to Client
+     app.get('/instructorClasses', async (req, res) => {
+      instructorEmail = req.query.instructorEmail
+      console.log(instructorEmail);
+      filter = { 'instructorInfo.instructorEmail': instructorEmail }
+      console.log(filter);
+      const result = await classesCollection.find(filter).toArray()
+      res.send(result)
+    })
+
+
     // Send Classes to instructor
     app.get('/classes', async (req, res) => {
       const result = await classesCollection.find().toArray();
@@ -285,6 +296,7 @@ async function run() {
         const result = await selectedClassesCollection.find(filter).toArray()
         res.send(result)
       })
+
 
 
 
