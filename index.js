@@ -132,6 +132,20 @@ async function run() {
 
 
 
+  // DELETE User From Manage Users Page by Admin
+  app.delete('/users/:id', verifyJWT, async (req, res) => {
+    const id = req.params.id
+
+    const query = { _id: new ObjectId(id) }
+
+    result = usersCollection.deleteOne(query);
+    res.send(result);
+  })
+
+
+
+  
+
   // Create Instructor API
   app.patch('/users/instructor/:id', async (req, res) => {
     const id = req.params.id;
