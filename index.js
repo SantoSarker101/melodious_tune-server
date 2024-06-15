@@ -3,6 +3,7 @@ const app = express()
 const cors = require('cors');
 const jwt = require('jsonwebtoken')
 require('dotenv').config()
+const stripe = require('stripe')(process.env.PAYMENT_SK)
 const port = process.env.PORT || 5000;
 
 
@@ -56,6 +57,7 @@ async function run() {
     const usersCollection = client.db('melodiousTuneDb').collection('users')
     const classesCollection = client.db('melodiousTuneDb').collection('classes')
     const selectedClassesCollection = client.db('melodiousTuneDb').collection('selectedClasses')
+    const paymentCollection = client.db('melodiousTuneDb').collection('payment')
 
 
 
@@ -144,7 +146,7 @@ async function run() {
 
 
 
-  
+
 
   // Create Instructor API
   app.patch('/users/instructor/:id', async (req, res) => {
@@ -319,6 +321,38 @@ async function run() {
       const query = { _id: new ObjectId(id) }
       const result = await selectedClassesCollection.deleteOne(query)
       res.send(result);
+    })
+
+
+
+
+
+
+  // Payment Related API
+    // Create Payment intent
+    app.post('/create-payment-intent', verifyJWT, async(req, res) => {
+      const { price } = req.body;
+      const amount = price * 100;
+      console.log(amount);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card']
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret
+      })
+
+    })
+
+
+
+    // Payment Related API
+    app.post('/payments', async (req, res) => {
+      const payment = req.body;
+      const result = await paymentCollection.insertOne(payment)
+      res.send(result)
     })
 
 
