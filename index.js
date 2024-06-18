@@ -250,7 +250,7 @@ async function run() {
     })
 
 
-    // Send Classes to instructor
+    // Get Classes From Database
     app.get('/classes', async (req, res) => {
       // const query = {}
       // const options = {
@@ -263,6 +263,18 @@ async function run() {
         sort: {
           'price': sort === 'asc' ? 1 : -1
         }
+      }
+
+      const result = await classesCollection.find(query, options).toArray();
+      res.send(result)
+    })
+
+
+    // Get Enrollbased Classes From Database
+    app.get('/enrollbasedClasses', async (req, res) => {
+      const query = {}
+      const options = {
+        sort: { 'enrolled': -1 }
       }
 
       const result = await classesCollection.find(query, options).toArray();
@@ -371,36 +383,65 @@ async function run() {
 
     // Payment Related API
     app.post('/payments', verifyJWT, async (req, res) => {
-      const payment = req.body;
-      const insertResult = await paymentCollection.insertOne(payment)
+      try {
+        const payment = req.body;
+        const insertResult = await paymentCollection.insertOne(payment);
 
-      const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } }
-      const deleteResult = await selectedClassesCollection.deleteMany(query)
+        const selectedClassIds = payment.selectedClassId.map(id => {
+          if (ObjectId.isValid(id)) {
+            return new ObjectId(id)
+    ;
+          } else {
+            throw new Error(`Invalid ObjectId: ${id}`);
+          }
+        });
 
-      const classQuery = { _id: { $eq: payment.singleClassId.map(id => new ObjectId(id)) } }
-      const classData = await classesCollection.find(classQuery)
+        const deleteResult = await selectedClassesCollection.deleteMany({ _id: { $in: selectedClassIds } });
 
-      const seats = classData.seats
-      const enrolled = classData.enrolled
+        const singleClassIds = payment.singleClassId.map(id => {
+          if (ObjectId.isValid(id)) {
+            return new ObjectId(id)
+    ;
+          } else {
+            throw new Error(`Invalid ObjectId: ${id}`);
+          }
+        });
 
-      console.log('result', seats, enrolled);
+        const updateResults = [];
+        for (const classId of singleClassIds) {
+          const classData = await classesCollection.findOne({ _id: classId });
 
+          if (!classData) {
+            return res.status(404).send({ message: `Class not found: ${classId}` });
+          }
 
-      // const id = req.params.id;
-      // const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-      $set: {
-        enrolled: enrolled + 1,
-        seats: seats - 1
-      },
-    };
+          const seats = parseInt(classData.seats);
+          const enrolled = parseInt(classData.enrolled);
 
-    const updatedEnrolledAndSeats = await classesCollection.updateMany(classQuery, updateDoc)
+          // if (isNaN(seats) || isNaN(enrolled)) {
+          //   return res.status(400).send({ message: `Invalid numeric value for seats or enrolled for class: ${classId}` });
+          // }
 
+          const updateResult = await classesCollection.updateOne({ _id: classId }, {
+            $set: {
+              seats: seats - 1,
+              enrolled: enrolled + 1
+            }
+          });
 
-      res.send({ insertResult, deleteResult, updatedEnrolledAndSeats })
-    })
+          updateResults.push(updateResult);
 
+          if (updateResult.modifiedCount === 0) {
+            return res.status(500).send({ message: `Failed to update class enrollment and seats for class: ${classId}` });
+          }
+        }
+
+        res.send({ insertResult, deleteResult, updateResults });
+      } catch (error) {
+        console.error('Error processing payment:', error);
+        res.status(500).send({ message: 'Internal Server Error', error: error.message });
+      }
+    });
 
 
     // GET selectedClasses From database to Client
@@ -414,9 +455,13 @@ async function run() {
     })
 
 
-
-
-
+    // DELETE Enrolled Classes from Database
+    app.delete('/payments/:id', async (req, res) => {
+      const id = req.params.id
+      filter = { _id: new ObjectId(id) }
+      const result = await paymentCollection.deleteOne(filter)
+      res.send(result)
+    })
 
 
     // Send a ping to confirm a successful connection
@@ -439,6 +484,499 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
 	console.log(`Melodious Tune is Tuning on port ${port}`);
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   // try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const selectedClassIds = payment.selectedClassId.map(id => {new ObjectId(id)});
+
+    //     const query = { _id: { $in: selectedClassIds } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Ensure the singleClassId is an array of valid ObjectIds
+    //     const singleClassIds = payment.singleClassId.map(id => {new ObjectId(id)});
+
+    //     // Update the seats and enrolled fields for each class in the array
+    //     // const updateResults = [];
+    //     // for (const classId of singleClassIds) {
+    //       const classQuery = { _id: singleClassIds };
+    //       // const classData = await classesCollection.findOne(classQuery);
+
+    //       // if (!classData) {
+    //       //   return res.status(404).send({ message: `Class not found: ${classId}` });
+    //       // }
+
+    //       // Log the current values of seats and enrolled
+    //       // console.log(`Class ID: ${classId}`);
+    //       // console.log(`Current seats: ${classData.seats}`);
+    //       // console.log(`Current enrolled: ${classData.enrolled}`);
+
+    //       // Update the seats and enrolled fields
+    //       const updateDoc = {
+    //         $inc: {
+    //           enrolled: 1,
+    //           seats: -1
+    //         }
+    //       };
+
+    //       const updateResults = await classesCollection.updateOne(classQuery, updateDoc);
+    //       // updateResults.push(updateResult);
+
+    //       // Log the result of the update operation
+    //       // console.log(`Update result for class ${classId}: ${updateResult.matchedCount} document(s) matched, ${updateResult.modifiedCount} document(s) modified`);
+
+    //       // if (updateResult.modifiedCount === 0) {
+    //       //   return res.status(500).send({ message: `Failed to update class enrollment and seats for class: ${classId}` });
+    //       // }
+    //     // }
+
+    //     res.send({ insertResult, deleteResult, updateResults });
+    //   // } catch (error) {
+    //   //   console.error('Error processing payment:', error);
+    //   //   res.status(500).send({ message: 'Internal Server Error', error: error.message });
+    //   // }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const selectedClassIds = payment.selectedClassId.map(id => {
+    //       if (ObjectId.isValid(id)) {
+    //         return new ObjectId(id)
+    // ;
+    //       } else {
+    //         throw new Error(`Invalid ObjectId: ${id}`);
+    //       }
+    //     });
+
+    //     const query = { _id: { $in: selectedClassIds } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Ensure the singleClassId is an array of valid ObjectIds
+    //     const singleClassIds = payment.singleClassId.map(id => {
+    //       if (ObjectId.isValid(id)) {
+    //         return new ObjectId(id)
+    // ;
+    //       } else {
+    //         throw new Error(`Invalid ObjectId: ${id}`);
+    //       }
+    //     });
+
+    //     // Update the seats and enrolled fields for each class in the array
+    //     const updateResults = [];
+    //     for (const classId of singleClassIds) {
+    //       const classQuery = { _id: classId };
+    //       const classData = await classesCollection.findOne(classQuery);
+
+    //       if (!classData) {
+    //         return res.status(404).send({ message: `Class not found: ${classId}` });
+    //       }
+
+    //       // Log the current values of seats and enrolled
+    //       console.log(`Class ID: ${classId}`);
+    //       console.log(`Current seats: ${classData.seats}`);
+    //       console.log(`Current enrolled: ${classData.enrolled}`);
+
+    //       // Update the seats and enrolled fields
+    //       const updateDoc = {
+    //         $inc: {
+    //           enrolled: 1,
+    //           seats: -1
+    //         }
+    //       };
+
+    //       const updateResult = await classesCollection.updateOne(classQuery, updateDoc);
+    //       updateResults.push(updateResult);
+
+    //       // Log the result of the update operation
+    //       console.log(`Update result for class ${classId}: ${updateResult.matchedCount} document(s) matched, ${updateResult.modifiedCount} document(s) modified`);
+
+    //       if (updateResult.modifiedCount === 0) {
+    //         return res.status(500).send({ message: `Failed to update class enrollment and seats for class: ${classId}` });
+    //       }
+    //     }
+
+    //     res.send({ insertResult, deleteResult, updateResults });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error', error: error.message });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const selectedClassIds = payment.selectedClassId.map(id => {
+    //       if (ObjectId.isValid(id)) {
+    //         return new ObjectId(id)
+    // ;
+    //       } else {
+    //         throw new Error(`Invalid ObjectId: ${id}`);
+    //       }
+    //     });
+
+    //     const query = { _id: { $in: selectedClassIds } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Ensure the singleClassId is a valid ObjectId and is not a list
+    //     const singleClassId = payment.singleClassId;
+    //     if (Array.isArray(singleClassId)) {
+    //       throw new Error(`Invalid ObjectId: singleClassId should not be an array: ${singleClassId}`);
+    //     }
+
+    //     if (!ObjectId.isValid(singleClassId)) {
+    //       throw new Error(`Invalid ObjectId: ${singleClassId}`);
+    //     }
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: new ObjectId(singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     // Log the current values of seats and enrolled
+    //     console.log(`Class ID: ${singleClassId}`);
+    //     console.log(`Current seats: ${classData.seats}`);
+    //     console.log(`Current enrolled: ${classData.enrolled}`);
+
+    //     // Update the seats and enrolled fields
+    //     const updateDoc = {
+    //       $inc: {
+    //         enrolled: 1,
+    //         seats: -1
+    //       }
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     // Log the result of the update operation
+    //     console.log(`Update result: ${updatedEnrolledAndSeats.matchedCount} document(s) matched, ${updatedEnrolledAndSeats.modifiedCount} document(s) modified`);
+
+    //     if (updatedEnrolledAndSeats.modifiedCount === 0) {
+    //       return res.status(500).send({ message: "Failed to update class enrollment and seats" });
+    //     }
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error', error: error.message });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const selectedClassIds = payment.selectedClassId.map(id => {
+    //       if (ObjectId.isValid(id)) {
+    //         return new ObjectId(id)
+    // ;
+    //       } else {
+    //         throw new Error(`Invalid ObjectId: ${id}`);
+    //       }
+    //     });
+
+    //     const query = { _id: { $in: selectedClassIds } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Ensure the singleClassId is a valid ObjectId
+    //     const singleClassId = payment.singleClassId;
+    //     if (!ObjectId.isValid(singleClassId)) {
+    //       throw new Error(`Invalid ObjectId: ${singleClassId}`);
+    //     }
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: new ObjectId(singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     // Log the current values of seats and enrolled
+    //     console.log(`Class ID: ${singleClassId}`);
+    //     console.log(`Current seats: ${classData.seats}`);
+    //     console.log(`Current enrolled: ${classData.enrolled}`);
+
+    //     // Update the seats and enrolled fields
+    //     const updateDoc = {
+    //       $inc: {
+    //         enrolled: 1,
+    //         seats: -1
+    //       }
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     // Log the result of the update operation
+    //     console.log(`Update result: ${updatedEnrolledAndSeats.matchedCount} document(s) matched, ${updatedEnrolledAndSeats.modifiedCount} document(s) modified`);
+
+    //     if (updatedEnrolledAndSeats.modifiedCount === 0) {
+    //       return res.status(500).send({ message: "Failed to update class enrollment and seats" });
+    //     }
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error', error: error.message });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: new ObjectId(payment.singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     // Log the current values of seats and enrolled
+    //     console.log(`Class ID: ${payment.singleClassId}`);
+    //     console.log(`Current seats: ${classData.seats}`);
+    //     console.log(`Current enrolled: ${classData.enrolled}`);
+
+    //     // Update the seats and enrolled fields
+    //     const updateDoc = {
+    //       $inc: {
+    //         enrolled: 1,
+    //         seats: -1
+    //       }
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     // Log the result of the update operation
+    //     console.log(`Update result: ${updatedEnrolledAndSeats.matchedCount} document(s) matched, ${updatedEnrolledAndSeats.modifiedCount} document(s) modified`);
+
+    //     if (updatedEnrolledAndSeats.modifiedCount === 0) {
+    //       return res.status(500).send({ message: "Failed to update class enrollment and seats" });
+    //     }
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: new ObjectId(payment.singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+    //     console.log(classData);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     // Update the seats and enrolled fields
+    //     const updateDoc = {
+    //       $inc: {
+    //         enrolled: enrolled + 1,
+    //         seats: enrolled -1
+    //       }
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     // Update the seats and enrolled fields
+    //     const updateDoc = {
+    //       $inc: {
+    //         enrolled: 1,
+    //         seats: -1
+    //       }
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Find the class to update its seats and enrolled number
+    //     const classQuery = { _id: new ObjectId(payment.singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     const seats = classData.seats;
+    //     const enrolled = classData.enrolled;
+
+    //     const updateDoc = {
+    //       $set: {
+    //         enrolled: enrolled + 1,
+    //         seats: seats - 1
+    //       },
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   const payment = req.body;
+    //   const insertResult = await paymentCollection.insertOne(payment)
+
+    //   const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } }
+    //   const deleteResult = await selectedClassesCollection.deleteMany(query)
+
+    //   const classQuery = { _id: { $eq: payment.singleClassId.map(id => new ObjectId(id)) } }
+    //   const classData = await classesCollection.find(classQuery)
+
+    //   const seats = classData.seats
+    //   const enrolled = classData.enrolled
+
+    //   console.log('result', seats, enrolled);
+
+
+    //   // const id = req.params.id;
+    //   // const filter = { _id: new ObjectId(id) };
+    //   const updateDoc = {
+    //   $set: {
+    //     enrolled: enrolled + 1,
+    //     seats: seats - 1
+    //   },
+    // };
+
+    // const updatedEnrolledAndSeats = await classesCollection.updateMany(classQuery, updateDoc)
+
+
+    //   res.send({ insertResult, deleteResult, updatedEnrolledAndSeats })
+    // })
+// --------
+
+    // app.post('/payments', verifyJWT, async (req, res) => {
+    //   try {
+    //     const payment = req.body;
+    //     const insertResult = await paymentCollection.insertOne(payment);
+
+    //     // Delete selected class items
+    //     const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } };
+    //     const deleteResult = await selectedClassesCollection.deleteMany(query);
+
+    //     // Update enrolled number and seats
+    //     const classQuery = { _id: new ObjectId(payment.singleClassId) };
+    //     const classData = await classesCollection.findOne(classQuery);
+
+    //     if (!classData) {
+    //       return res.status(404).send({ message: "Class not found" });
+    //     }
+
+    //     const seats = classData.seats;
+    //     const enrolled = classData.enrolled;
+
+    //     const updateDoc = {
+    //       $set: {
+    //         enrolled: enrolled + 1,
+    //         seats: seats - 1
+    //       },
+    //     };
+
+    //     const updatedEnrolledAndSeats = await classesCollection.updateOne(classQuery, updateDoc);
+
+    //     res.send({ insertResult, deleteResult, updatedEnrolledAndSeats });
+    //   } catch (error) {
+    //     console.error('Error processing payment:', error);
+    //     res.status(500).send({ message: 'Internal Server Error' });
+    //   }
+    // });
+
+
+
+
 
 
 
