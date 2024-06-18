@@ -103,6 +103,14 @@ async function run() {
     res.send(result)
   })
 
+  // Get only Instructors
+  app.get('/users/instructors', async (req, res) => {
+    const Instructor = req.query.Instructor
+    const query = { role: Instructor }
+    const result = await usersCollection.find(query).toArray();
+    res.send(result)
+  })
+
 
   app.put('/users/:email', async(req, res) => {
     const email = req.params.email
@@ -214,7 +222,7 @@ async function run() {
       if (user) {
         Instructor  = user?.role === 'Instructor';
       }
-      res.send({ Instructor  });
+      res.send({ Instructor });
     })
 
 
@@ -244,7 +252,20 @@ async function run() {
 
     // Send Classes to instructor
     app.get('/classes', async (req, res) => {
-      const result = await classesCollection.find().toArray();
+      // const query = {}
+      // const options = {
+      //   sort: { 'price': 1 }
+      // }
+
+      const sort = req.query.sort;
+      const query = {};
+      const options = {
+        sort: {
+          'price': sort === 'asc' ? 1 : -1
+        }
+      }
+
+      const result = await classesCollection.find(query, options).toArray();
       res.send(result)
     })
 
@@ -351,10 +372,46 @@ async function run() {
     // Payment Related API
     app.post('/payments', verifyJWT, async (req, res) => {
       const payment = req.body;
-      const result = await paymentCollection.insertOne(payment)
-      res.send(result)
+      const insertResult = await paymentCollection.insertOne(payment)
+
+      const query = { _id: { $in: payment.selectedClassId.map(id => new ObjectId(id)) } }
+      const deleteResult = await selectedClassesCollection.deleteMany(query)
+
+      const classQuery = { _id: { $eq: payment.singleClassId.map(id => new ObjectId(id)) } }
+      const classData = await classesCollection.find(classQuery)
+
+      const seats = classData.seats
+      const enrolled = classData.enrolled
+
+      console.log('result', seats, enrolled);
+
+
+      // const id = req.params.id;
+      // const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+      $set: {
+        enrolled: enrolled + 1,
+        seats: seats - 1
+      },
+    };
+
+    const updatedEnrolledAndSeats = await classesCollection.updateMany(classQuery, updateDoc)
+
+
+      res.send({ insertResult, deleteResult, updatedEnrolledAndSeats })
     })
 
+
+
+    // GET selectedClasses From database to Client
+    app.get('/payments', verifyJWT, async (req, res) => {
+      email = req.query.email
+      console.log(studentEmail);
+      filter = { email: email }
+      console.log(filter);
+      const result = await paymentCollection.find(filter).toArray()
+      res.send(result)
+    })
 
 
 
@@ -382,3 +439,30 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
 	console.log(`Melodious Tune is Tuning on port ${port}`);
 })
+
+
+
+
+
+
+
+// app.post('/payments', async (req, res) => {
+//   const payment = req.body;
+//   const insertedResult = await paymentCollection.insertOne(payment);
+
+//   const classId = payment.classesId;
+//   const classQuery = { _id: { $eq: new ObjectId(classId) } };
+//   const classData = await classCollection.findOne(classQuery);
+//   const availableSeats = parseInt(classData?.availableSeats);
+//   const enrolled = parseInt(classData?.enrolled);
+//   console.log('231',availableSeats,enrolled)
+//   const classUpdate = {
+//       $set: { availableSeats: availableSeats - 1, enrolled: enrolled + 1 },
+//   };
+//   const classUpdateResult = await classCollection.updateOne(classQuery, classUpdate);
+
+//   const query = { _id: { $in: [new ObjectId(payment.ClasId)] } };
+//   const deleteResult = await selectedClassCollection.deleteOne(query);
+
+//   res.send(deleteResult,insertedResult,classUpdateResult);
+// })
